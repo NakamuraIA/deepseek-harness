@@ -3,10 +3,11 @@
  * document — `html { color-scheme }` for native UA chrome (scrollbars, form
  * controls), `body[data-ds-dark-theme]` for the token palette, the active
  * theme's alias-token overrides as inline CSS variables on body, the content
- * font-size axis (`--dsh-content-font-size`), and one presenter-owned
- * `meta[name="theme-color"]` for surrounding browser UI. Pure DOM writes, no
- * React involvement; the presenter only ever retracts what it wrote itself,
- * so foreign attributes, metadata, and inline styles survive.
+ * font-size axis (`--dsh-content-font-size`), the reading attributes the theme
+ * stylesheets key their font stacks and wide-spacing rules on, and one
+ * presenter-owned `meta[name="theme-color"]` for surrounding browser UI. Pure
+ * DOM writes, no React involvement; the presenter only ever retracts what it
+ * wrote itself, so foreign attributes, metadata, and inline styles survive.
  */
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 
@@ -15,6 +16,12 @@ export const DARK_ATTRIBUTE = 'data-ds-dark-theme'
 
 /** Body variable carrying the user's content font size in px. */
 export const CONTENT_FONT_SIZE_VARIABLE = '--dsh-content-font-size'
+
+/** Body attribute carrying the reading font family; base.css maps each id to a stack. */
+export const FONT_FAMILY_ATTRIBUTE = 'data-dsh-font-family'
+
+/** Body attribute selecting the wider letter, word, and line spacing. */
+export const WIDE_SPACING_ATTRIBUTE = 'data-dsh-wide-spacing'
 
 /** Applies theme snapshots to the document; one instance per plugin fiber. */
 export class ThemePresenter {
@@ -32,10 +39,11 @@ export class ThemePresenter {
   /**
    * Project a snapshot onto the document: set root `color-scheme` and the body
    * palette attribute from `active.colorScheme` (never the id — `system` is
-   * resolved upstream), publish the content font-size axis, then replace the
-   * previously applied token variables with `active.tokens`. Browser
-   * theme-color metadata follows the computed body background after those
-   * writes, so the rendered palette remains the color authority.
+   * resolved upstream), publish the content font-size axis and the reading
+   * attributes, then replace the previously applied token variables with
+   * `active.tokens`. Browser theme-color metadata follows the computed body
+   * background after those writes, so the rendered palette remains the color
+   * authority.
    * @param snapshot - resolved theme snapshot from ctx.theme.
    */
   apply(snapshot: ThemeSnapshot): void {
@@ -45,6 +53,8 @@ export class ThemePresenter {
     if (scheme === 'dark') body.setAttribute(DARK_ATTRIBUTE, '')
     else body.removeAttribute(DARK_ATTRIBUTE)
     body.style.setProperty(CONTENT_FONT_SIZE_VARIABLE, `${snapshot.fontSize}px`)
+    body.setAttribute(FONT_FAMILY_ATTRIBUTE, snapshot.fontFamily)
+    body.toggleAttribute(WIDE_SPACING_ATTRIBUTE, snapshot.wideSpacing)
     for (const name of this.appliedTokens) body.style.removeProperty(name)
     this.appliedTokens = []
     for (const [name, value] of Object.entries(snapshot.active.tokens)) {
@@ -55,12 +65,14 @@ export class ThemePresenter {
     if (!this.themeColorMeta.isConnected) document.head.append(this.themeColorMeta)
   }
 
-  /** Retract root color-scheme, the palette attribute, token variables, the font-size axis, and the owned metadata node. */
+  /** Retract root color-scheme, the palette and reading attributes, token variables, the font-size axis, and the owned metadata node. */
   dispose(): void {
     document.documentElement.style.removeProperty('color-scheme')
     const body = document.body
     body.removeAttribute(DARK_ATTRIBUTE)
     body.style.removeProperty(CONTENT_FONT_SIZE_VARIABLE)
+    body.removeAttribute(FONT_FAMILY_ATTRIBUTE)
+    body.removeAttribute(WIDE_SPACING_ATTRIBUTE)
     for (const name of this.appliedTokens) body.style.removeProperty(name)
     this.appliedTokens = []
     this.themeColorMeta.remove()

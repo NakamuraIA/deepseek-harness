@@ -13,3 +13,33 @@
   --ds-transition-duration-fast: 0.1s;
   --ds-transition-duration-slow: 0.3s;
 }
+
+/* Reading font families. `system` is the :root stack above, so only the
+ * alternatives carry a rule; the body attribute holds the persisted choice.
+ * Each stack keeps the CJK faces the :root stack names and a sans-serif tail:
+ * a missing family must degrade to a readable face, never to a serif or cursive
+ * default, and a Chinese reader must not land on a system CJK serif. */
+body[data-dsh-font-family='verdana'] {
+  --dsw-font-family: Verdana, Geneva, Tahoma, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+body[data-dsh-font-family='tahoma'] {
+  --dsw-font-family: Tahoma, Verdana, Geneva, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+body[data-dsh-font-family='comic'] {
+  --dsw-font-family: 'Comic Sans MS', 'Comic Neue', 'Segoe Print', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+/* Wide reading. Letter and word spacing inherit from body; the line-height
+ * increment rides --dsh-reading-line-extra, which the Markdown font axis adds
+ * to each of its line-heights (gradient-shadow-text.css). */
+body {
+  --dsh-reading-line-extra: 0px;
+}
+
+body[data-dsh-wide-spacing] {
+  --dsh-reading-line-extra: 6px;
+  letter-spacing: 0.05em;
+  word-spacing: 0.12em;
+}

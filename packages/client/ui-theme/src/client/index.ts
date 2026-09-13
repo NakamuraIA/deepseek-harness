@@ -20,20 +20,24 @@ import type { AppearanceRowInjected } from './AppearanceRow.tsx'
 import { AppearanceRow } from './AppearanceRow.tsx'
 import type { FontSizeRowInjected } from './FontSizeRow.tsx'
 import { FontSizeRow } from './FontSizeRow.tsx'
-import { createAppearanceRowStore, createFontSizeRowStore } from './settings-store.ts'
+import type { ReadingRowInjected } from './ReadingRow.tsx'
+import { ReadingRow } from './ReadingRow.tsx'
+import { createAppearanceRowStore, createFontSizeRowStore, createReadingRowStore } from './settings-store.ts'
 import { installThemeStyles } from './styles.ts'
 import { en, zh, type ThemeKey } from './locales.ts'
 import {
-  DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, FONT_SIZE_FIELD, FONT_SIZE_MAX, FONT_SIZE_MIN,
-  isThemePreference, THEME_PREFERENCE_FIELD, THEME_SETTINGS_NAMESPACE,
-  type ThemePreference, type ThemeSettings,
+  DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, DEFAULT_WIDE_SPACING,
+  FONT_FAMILY_FIELD, FONT_SIZE_FIELD, FONT_SIZE_MAX, FONT_SIZE_MIN, isFontFamily, isThemePreference,
+  THEME_PREFERENCE_FIELD, THEME_SETTINGS_NAMESPACE, WIDE_SPACING_FIELD,
+  type FontFamily, type ThemePreference, type ThemeSettings,
 } from '../theme-settings.ts'
 
 export type { AppearanceRowComponentProps, AppearanceRowInjected } from './AppearanceRow.tsx'
 export type { FontSizeRowComponentProps, FontSizeRowInjected } from './FontSizeRow.tsx'
-export type { AppearanceRowState, FontSizeRowState } from './settings-store.ts'
+export type { ReadingRowComponentProps, ReadingRowInjected } from './ReadingRow.tsx'
+export type { AppearanceRowState, FontSizeRowState, ReadingRowState } from './settings-store.ts'
 export type { ThemeKey } from './locales.ts'
-export type { ThemePreference, ThemeSettings } from '../theme-settings.ts'
+export type { FontFamily, ThemePreference, ThemeSettings } from '../theme-settings.ts'
 
 /** Namespace owning this feature's settings-row copy. */
 export const SETTINGS_NS = 'settings.theme'
@@ -82,6 +86,10 @@ export interface ThemeSnapshot {
   preference: ThemePreference
   /** Conversation content font size in px (integer within FONT_SIZE_MIN..FONT_SIZE_MAX). */
   fontSize: number
+  /** Persisted reading font family. */
+  fontFamily: FontFamily
+  /** Whether the conversation text carries the wider letter, word, and line spacing. */
+  wideSpacing: boolean
   /**
    * The resolved active theme (`system` resolved via prefers-color-scheme)
    * with override layers folded into its tokens (seq order, later layers win
@@ -161,6 +169,8 @@ export class ThemeRuntime {
   private themes: ThemeDefinition[] = [...BUILTIN_THEMES]
   private preference: ThemePreference
   private fontSize: number = bootstrapFontSize()
+  private fontFamily: FontFamily = bootstrapFontFamily()
+  private wideSpacing: boolean = bootstrapWideSpacing()
   private revision = 0
   private snapshot: ThemeSnapshot
   private readonly media: MediaQueryList | undefined
@@ -225,42 +235,103 @@ export class ThemeRuntime {
   /**
    * Switch the theme preference — the only user preference write entry.
    * Built-in preferences are written through the settings scope and every
-   * accepted value emits `theme/change`.
-   * @param id - a registered theme id or `system`; unknown ids throw.
+   * accepted value emits `theme/change`. Custom ids stay in-process.
+   * @param id - a registered theme id or `system`; unknown ids throw synchronously.
+   * @returns settlement after the write, resolving whether the settled state
+   * kept the id ({@link settle}).
    */
-  setTheme(id: string): void {
+  setTheme(id: string): Promise<boolean> {
     if (id !== 'system' && !this.themes.some(t => t.id === id)) {
       throw new Error(`theme "${id}" is not registered`)
     }
-    if (this.preference === id) return
+    if (this.preference === id) return Promise.resolve(true)
     this.preference = id as ThemePreference
-    if (isThemePreference(id)) void this.host.set(THEME_PREFERENCE_FIELD, id)
+    // Custom ids are in-process extension themes; only the built-in product
+    // preferences cross the Host settings schema.
+    const written = isThemePreference(id) ? this.host.set(THEME_PREFERENCE_FIELD, id) : Promise.resolve()
     this.publish()
+    return this.kept(written, () => this.preference === id)
   }
 
   /**
    * Change the conversation content font size — the only font-size write
    * entry. Accepted values are written through the settings scope and emit
    * `theme/change`.
-   * @param px - integer px within FONT_SIZE_MIN..FONT_SIZE_MAX; out-of-range or fractional values throw.
+   * @param px - integer px within FONT_SIZE_MIN..FONT_SIZE_MAX; out-of-range or fractional values throw synchronously.
+   * @returns settlement after the write, resolving whether the settled state kept the size ({@link settle}).
    */
-  setFontSize(px: number): void {
+  setFontSize(px: number): Promise<boolean> {
     if (!Number.isInteger(px) || px < FONT_SIZE_MIN || px > FONT_SIZE_MAX) {
       throw new Error(`font size ${px} is outside ${FONT_SIZE_MIN}..${FONT_SIZE_MAX}`)
     }
-    if (this.fontSize === px) return
+    if (this.fontSize === px) return Promise.resolve(true)
     this.fontSize = px
-    void this.host.set(FONT_SIZE_FIELD, px)
+    const written = this.host.set(FONT_SIZE_FIELD, px)
     this.publish()
+    return this.kept(written, () => this.fontSize === px)
   }
 
-  /** Adopt the scope's accepted durable preference without writing it back. */
+  /**
+   * Select the reading font family — the only write entry for it. Accepted
+   * values are written through the settings scope and emit `theme/change`.
+   * @param family - a value from FONT_FAMILIES; anything else throws synchronously.
+   * @returns settlement after the write, resolving whether the settled state kept the family ({@link settle}).
+   */
+  setFontFamily(family: FontFamily): Promise<boolean> {
+    if (!isFontFamily(family)) {
+      throw new Error(`reading font "${String(family)}" is not supported`)
+    }
+    if (this.fontFamily === family) return Promise.resolve(true)
+    this.fontFamily = family
+    const written = this.host.set(FONT_FAMILY_FIELD, family)
+    this.publish()
+    return this.kept(written, () => this.fontFamily === family)
+  }
+
+  /**
+   * Turn the wider reading spacing on or off — the only write entry for it.
+   * The value is written through the settings scope and emits `theme/change`.
+   * @param wide - whether the conversation text carries the wider spacing.
+   * @returns settlement after the write, resolving whether the settled state kept the choice ({@link settle}).
+   */
+  setWideSpacing(wide: boolean): Promise<boolean> {
+    if (this.wideSpacing === wide) return Promise.resolve(true)
+    this.wideSpacing = wide
+    const written = this.host.set(WIDE_SPACING_FIELD, wide)
+    this.publish()
+    return this.kept(written, () => this.wideSpacing === wide)
+  }
+
+  /**
+   * Await one Host write and report whether the state that settled kept the
+   * value the user chose. The settings transport reports a refused write as a
+   * plain settlement and reloads the durable section, so comparing the settled
+   * state against the request is the only evidence that the write was kept:
+   * a refusal has already reverted this service by the time the write resolves.
+   * A rejected transport settles `false` the same way, and the returned promise
+   * never rejects, so a caller that ignores it (a dynamic plugin, say) cannot
+   * raise an unhandled rejection.
+   * @param written - the queued Host write.
+   * @param holds - reads whether the requested value still stands.
+   * @returns whether the write survived.
+   */
+  private kept(written: Promise<void>, holds: () => boolean): Promise<boolean> {
+    return written.then(
+      () => holds(),
+      () => false,
+    )
+  }
+
+  /** Adopt the scope's accepted durable preferences without writing them back. */
   private adopt(): void {
     const section = this.host.getSnapshot().value
     if (section === undefined) return
-    if (this.preference === section.preference && this.fontSize === section.fontSize) return
+    if (this.preference === section.preference && this.fontSize === section.fontSize
+      && this.fontFamily === section.fontFamily && this.wideSpacing === section.wideSpacing) return
     this.preference = section.preference
     this.fontSize = section.fontSize
+    this.fontFamily = section.fontFamily
+    this.wideSpacing = section.wideSpacing
     this.publish()
   }
 
@@ -328,6 +399,8 @@ export class ThemeRuntime {
     return Object.freeze({
       preference: this.preference,
       fontSize: this.fontSize,
+      fontFamily: this.fontFamily,
+      wideSpacing: this.wideSpacing,
       active: this.composeActive(active),
       themes: Object.freeze([...this.themes]),
       revision: this.revision,
@@ -375,6 +448,36 @@ function bootstrapFontSize(): number {
     : DEFAULT_FONT_SIZE
 }
 
+/** Body attribute carrying the reading font family (boot script and ui-layout's presenter). */
+const FONT_FAMILY_ATTRIBUTE = 'data-dsh-font-family'
+
+/** Body attribute selecting the wider reading spacing (boot script and ui-layout's presenter). */
+const WIDE_SPACING_ATTRIBUTE = 'data-dsh-wide-spacing'
+
+/**
+ * Read the reading font family the Host boot script wrote on `body` before any
+ * plugin ran, so the initial snapshot matches the stylesheets' attribute rules.
+ * Non-browser runs and mounts without the boot script fall back to the schema
+ * default; the durable settings adoption still lands afterwards.
+ */
+function bootstrapFontFamily(): FontFamily {
+  /* v8 ignore next -- needs a documentless run (node e2e booting the client tree), not constructible under jsdom */
+  if (typeof document === 'undefined') return DEFAULT_FONT_FAMILY
+  const raw = document.body.getAttribute(FONT_FAMILY_ATTRIBUTE)
+  return isFontFamily(raw) ? raw : DEFAULT_FONT_FAMILY
+}
+
+/**
+ * Read the wide-reading selection the Host boot script toggled on `body` before
+ * any plugin ran. The attribute's presence is the whole state, so a missing
+ * attribute and a `false` section agree.
+ */
+function bootstrapWideSpacing(): boolean {
+  /* v8 ignore next -- needs a documentless run (node e2e booting the client tree), not constructible under jsdom */
+  if (typeof document === 'undefined') return DEFAULT_WIDE_SPACING
+  return document.body.hasAttribute(WIDE_SPACING_ATTRIBUTE)
+}
+
 /**
  * Runtime shape check for one override layer (model-authored callers pass
  * untyped JS through the dynamic-package façade, so the static type cannot
@@ -419,6 +522,23 @@ function dynamicToken(name: string): ThemeTokenInspection {
  */
 export const inject = ['slots', 'locale', 'remote', 'settingsScope']
 
+/** One row's settlement sink: the store action that renders the failure notice. */
+interface WriteFailureSink {
+  /** Record whether the row's last write survived. */
+  markWriteFailed: (failed: boolean) => void
+}
+
+/**
+ * Route one preference write's settlement into the row that asked for it. The
+ * service folds a lost transport into the same `false` a refusal settles, so
+ * the row reports one failure state for both.
+ * @param written - the settlement the service returned for this write.
+ * @param sink - the asking row's store actions.
+ */
+function settleWrite(written: Promise<boolean>, sink: WriteFailureSink): void {
+  void written.then((kept) => { sink.markWriteFailed(!kept) })
+}
+
 /**
  * Client plugin body: provide the theme service and register the
  * feature-owned Appearance preference row into the General section's item
@@ -437,9 +557,12 @@ export function apply(ctx: ClientContext): void {
   let bound: BoundActions<typeof store> | undefined
   const fontSizeStore = createFontSizeRowStore()
   let fontSizeBound: BoundActions<typeof fontSizeStore> | undefined
+  const readingStore = createReadingRowStore()
+  let readingBound: BoundActions<typeof readingStore> | undefined
   const sync = (snapshot: ThemeSnapshot): void => {
     bound?.sync(snapshot.preference, snapshot.revision)
     fontSizeBound?.sync(snapshot.fontSize, snapshot.revision)
+    readingBound?.sync(snapshot.fontFamily, snapshot.wideSpacing, snapshot.revision)
   }
   ctx.on('theme/change', sync)
   const injected = (actions: BoundActions<typeof store>): AppearanceRowInjected => {
@@ -448,7 +571,7 @@ export function apply(ctx: ClientContext): void {
     // first render (the store's revision guard drops stale duplicates).
     sync(theme.getTheme())
     return {
-      setTheme: (id) => { theme.setTheme(id) },
+      setTheme: (id) => { settleWrite(theme.setTheme(id), actions) },
     }
   }
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
@@ -464,7 +587,7 @@ export function apply(ctx: ClientContext): void {
     fontSizeBound = actions
     sync(theme.getTheme())
     return {
-      setFontSize: (px) => { theme.setFontSize(px) },
+      setFontSize: (px) => { settleWrite(theme.setFontSize(px), actions) },
     }
   }
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
@@ -475,4 +598,21 @@ export function apply(ctx: ClientContext): void {
     locale: SETTINGS_NS,
     inject: fontSizeInjected,
   }, FontSizeRow))
+
+  const readingInjected = (actions: BoundActions<typeof readingStore>): ReadingRowInjected => {
+    readingBound = actions
+    sync(theme.getTheme())
+    return {
+      setFontFamily: (family) => { settleWrite(theme.setFontFamily(family), actions) },
+      setWideSpacing: (wide) => { settleWrite(theme.setWideSpacing(wide), actions) },
+    }
+  }
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'reading',
+    order: 12,
+    store: readingStore,
+    locale: SETTINGS_NS,
+    inject: readingInjected,
+  }, ReadingRow))
 }

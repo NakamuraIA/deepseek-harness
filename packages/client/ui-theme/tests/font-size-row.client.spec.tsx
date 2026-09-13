@@ -11,6 +11,7 @@ import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { FontSizeRow } from '../src/client/FontSizeRow.tsx'
 import type { FontSizeRowComponentProps } from '../src/client/FontSizeRow.tsx'
 import { createFontSizeRowStore } from '../src/client/settings-store.ts'
+import { FONT_SIZE_MAX, FONT_SIZE_MIN } from '../src/theme-settings.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
@@ -23,6 +24,7 @@ const COPY: Record<string, string> = {
   'fontSize.description': 'Only affects conversation content',
   'fontSize.increase': 'Increase font size',
   'fontSize.decrease': 'Decrease font size',
+  'write.failed': 'Not saved — the previous value is still in effect.',
 }
 
 /** Empty global standard-kit hooks (the row reads neither). */
@@ -87,12 +89,21 @@ describe('FontSizeRow', () => {
   })
 
   it('disables the outward arrow at each bound', () => {
-    mount(17)
+    mount(FONT_SIZE_MAX)
     expect(arrow('Increase font size').disabled).toBe(true)
     expect(arrow('Decrease font size').disabled).toBe(false)
     cleanup()
-    mount(12)
+    mount(FONT_SIZE_MIN)
     expect(arrow('Increase font size').disabled).toBe(false)
     expect(arrow('Decrease font size').disabled).toBe(true)
+  })
+
+  it('shows and clears the refused-write notice from the store mirror', () => {
+    const b = mount(14)
+    expect(screen.queryByRole('status')).toBeNull()
+    act(() => { b.store.actions.markWriteFailed(true) })
+    expect(screen.getByRole('status').textContent).toBe('Not saved — the previous value is still in effect.')
+    act(() => { b.store.actions.markWriteFailed(false) })
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })

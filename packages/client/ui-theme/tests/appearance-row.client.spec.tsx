@@ -22,6 +22,7 @@ const COPY: Record<string, string> = {
   'appearance.light': 'Light',
   'appearance.dark': 'Dark',
   'appearance.system': 'System',
+  'write.failed': 'Not saved — the previous value is still in effect.',
 }
 
 function emptySessions() {
@@ -80,5 +81,14 @@ describe('AppearanceRow', () => {
     act(() => { b.store.actions.sync('light', 1) })
     expect(pressed(/Light/)).toBe('true')
     expect(pressed(/Dark/)).toBe('false')
+  })
+
+  it('shows and clears the refused-write notice from the store mirror', () => {
+    const b = mount('dark')
+    expect(screen.queryByRole('status')).toBeNull()
+    act(() => { b.store.actions.markWriteFailed(true) })
+    expect(screen.getByRole('status').textContent).toBe('Not saved — the previous value is still in effect.')
+    act(() => { b.store.actions.markWriteFailed(false) })
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })

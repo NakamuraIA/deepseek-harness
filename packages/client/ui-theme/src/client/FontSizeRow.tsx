@@ -34,11 +34,13 @@ export type FontSizeRowComponentProps =
  */
 export function FontSizeRow({ t, setFontSize, useStore }: FontSizeRowComponentProps) {
   const fontSize = useStore(s => s.fontSize)
+  const writeFailed = useStore(s => s.writeFailed)
   return (
     <div className={css.row}>
       <div className={css.rowText}>
         <div className={css.title}>{t('fontSize.title')}</div>
         <div className={css.desc}>{t('fontSize.description')}</div>
+        {writeFailed && <div className={css.failure} role="status">{t('write.failed')}</div>}
       </div>
       <div className={css.control}>
         <div className={css.stepper}>

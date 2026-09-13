@@ -33,6 +33,15 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Refused-write notice: the row's only failure state, so it carries the error
+   hue and sits on the description line rather than beside the control. */
+.failure {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
 /* Stepper pill + unit label. The pill reuses the selector-pill geometry
    (h36 r18, module fill) holding the px value and an always-visible arrow
    column; the unit sits outside the pill. */

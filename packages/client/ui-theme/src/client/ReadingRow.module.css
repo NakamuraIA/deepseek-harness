@@ -1,0 +1,79 @@
+/* Reading row: title + description over the font pills and the wide-reading
+ * switch, same cell rhythm as the Appearance and Font-size rows (gap 8,
+ * pad 16/0, hairline separator; the section column strips it when last). */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 48px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.desc {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Refused-write notice: the row's only failure state, so it carries the error
+   hue and sits under the control it belongs to. */
+.failure {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+/* Sub-label over the row's second line: one step quieter than the group
+ * title, which stays the row's accessible heading. */
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Switch line: the label and its explanation sit left, the control trails. */
+.fieldRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.fieldText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

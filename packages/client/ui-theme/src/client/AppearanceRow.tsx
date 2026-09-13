@@ -41,6 +41,7 @@ const CUBES: readonly { id: ThemePreference; labelKey: ThemeKey; Icon: typeof Ic
  */
 export function AppearanceRow({ t, setTheme, useStore }: AppearanceRowComponentProps) {
   const preference = useStore(s => s.preference)
+  const writeFailed = useStore(s => s.writeFailed)
   return (
     <div className={css.group}>
       <div className={css.title}>{t('appearance.title')}</div>
@@ -58,6 +59,7 @@ export function AppearanceRow({ t, setTheme, useStore }: AppearanceRowComponentP
           </button>
         ))}
       </div>
+      {writeFailed && <div className={css.failure} role="status">{t('write.failed')}</div>}
     </div>
   )
 }

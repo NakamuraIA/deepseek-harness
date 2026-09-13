@@ -1,16 +1,24 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
-import { DARK_ATTRIBUTE, ThemePresenter } from '@deepseek-ai/dsh-client-ui-layout/src/client/theme-presenter.ts'
+import type { FontFamily, ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
+import {
+  DARK_ATTRIBUTE, FONT_FAMILY_ATTRIBUTE, ThemePresenter, WIDE_SPACING_ATTRIBUTE,
+} from '@deepseek-ai/dsh-client-ui-layout/src/client/theme-presenter.ts'
 
 const LIGHT_THEME_COLOR = 'rgb(255, 255, 255)'
 const DARK_THEME_COLOR = 'rgb(21, 21, 23)'
 
-function snapshot(colorScheme: 'light' | 'dark', tokens: Record<string, string> = {}, fontSize = 14): ThemeSnapshot {
+function snapshot(
+  colorScheme: 'light' | 'dark',
+  tokens: Record<string, string> = {},
+  fontSize = 14,
+  fontFamily: FontFamily = 'system',
+  wideSpacing = false,
+): ThemeSnapshot {
   // The presenter must key off colorScheme, not the id — keep them distinct.
   const active = { id: `${colorScheme}-test`, colorScheme, tokens }
-  return { preference: colorScheme, fontSize, active, themes: [active], revision: 1 }
+  return { preference: colorScheme, fontSize, fontFamily, wideSpacing, active, themes: [active], revision: 1 }
 }
 
 function clearThemePresentation(): void {
@@ -76,18 +84,33 @@ describe('ThemePresenter', () => {
     const presenter = new ThemePresenter()
     presenter.apply(snapshot('light'))
     expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('14px')
-    presenter.apply(snapshot('light', {}, 17))
-    expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('17px')
+    presenter.apply(snapshot('light', {}, 28))
+    expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('28px')
   })
 
-  it('dispose removes color-scheme, the attribute, the font-size axis, and every applied variable, sparing foreign inline styles', () => {
+  it('publishes the reading font family and the wide-spacing attribute, and follows changes', () => {
+    const presenter = new ThemePresenter()
+    presenter.apply(snapshot('light'))
+    expect(document.body.getAttribute(FONT_FAMILY_ATTRIBUTE)).toBe('system')
+    expect(document.body.hasAttribute(WIDE_SPACING_ATTRIBUTE)).toBe(false)
+    presenter.apply(snapshot('light', {}, 14, 'verdana', true))
+    expect(document.body.getAttribute(FONT_FAMILY_ATTRIBUTE)).toBe('verdana')
+    expect(document.body.hasAttribute(WIDE_SPACING_ATTRIBUTE)).toBe(true)
+    presenter.apply(snapshot('light', {}, 14, 'system', false))
+    expect(document.body.getAttribute(FONT_FAMILY_ATTRIBUTE)).toBe('system')
+    expect(document.body.hasAttribute(WIDE_SPACING_ATTRIBUTE)).toBe(false)
+  })
+
+  it('dispose removes color-scheme, the attributes, the font-size axis, and every applied variable, sparing foreign inline styles', () => {
     document.body.style.setProperty('--foreign', 'kept')
     const presenter = new ThemePresenter()
-    presenter.apply(snapshot('dark', { '--dsw-alias-bg': '#111' }))
+    presenter.apply(snapshot('dark', { '--dsw-alias-bg': '#111' }, 14, 'comic', true))
     const meta = themeColorMeta()
     presenter.dispose()
     expect(document.documentElement.style.colorScheme).toBe('')
     expect(document.body.hasAttribute(DARK_ATTRIBUTE)).toBe(false)
+    expect(document.body.hasAttribute(FONT_FAMILY_ATTRIBUTE)).toBe(false)
+    expect(document.body.hasAttribute(WIDE_SPACING_ATTRIBUTE)).toBe(false)
     expect(document.body.style.getPropertyValue('--dsw-alias-bg')).toBe('')
     expect(document.body.style.getPropertyValue('--dsh-content-font-size')).toBe('')
     expect(document.body.style.getPropertyValue('--foreign')).toBe('kept')
