@@ -348,6 +348,12 @@
     - id: ui-trajectory
       name: '@deepseek-ai/dsh-client-ui-trajectory'
 
+    # Read-aloud. The host calls the selected text-to-speech service (one folder
+    # per provider under the package), so the browser never holds an API key and
+    # no model is downloaded; the settings row owns service, voice, and tuning.
+    - id: ui-speech
+      name: '@nakamuraia/dsh-plugin-speech'
+
 # ── the agent plane moves behind agent presets ─────────────────────────────
 #
 # Every row below composes what ONE agent contributes to the host registries:
